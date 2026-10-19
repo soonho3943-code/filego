@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>파일 제출</title>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=4" />
+  <link rel="stylesheet" href="style.css?v=6" />
   <style>
     .done-box { text-align: center; padding: 40px 20px; }
     .done-box .icon { font-size: 54px; margin-bottom: 8px; }
@@ -75,7 +75,7 @@
 
   <div class="toast" id="toast"></div>
 
-  <script src="config.js?v=4"></script>
+  <script src="config.js?v=6"></script>
   <script>
     let data = { collections: [], roster: [] };
     let current = null;     // 선택한 취합
@@ -156,8 +156,7 @@
       // 소속별로 묶어서 표시
       const groups = {};
       data.roster.forEach(r => (groups[r.dept || '기타'] = groups[r.dept || '기타'] || []).push(r.name));
-      const saved = localStorageGet('filego-name');
-      const opt = n => `<option value="${esc(n)}" ${n === saved ? 'selected' : ''}>${esc(n)}</option>`;
+      const opt = n => `<option value="${esc(n)}">${esc(n)}</option>`;
       const keys = Object.keys(groups);
       document.getElementById('f-name').innerHTML = '<option value="">이름을 선택하세요</option>' +
         (keys.length === 1 && keys[0] === '기타'
@@ -277,7 +276,6 @@
         return;
       }
 
-      localStorageSet('filego-name', name);
       btn.textContent = '제출하기';
       document.getElementById('d-sub').textContent = `${name} 선생님 · ${current.title}`;
       document.getElementById('d-files').innerHTML = results.map(n => `<li><span>📄</span><span class="fname">${esc(n)}</span></li>`).join('');
@@ -310,9 +308,8 @@
       t._h = setTimeout(() => t.classList.remove('show'), 2500);
     }
 
-    // 이름 기억(다음 제출 때 자동 선택) — 저장이 막힌 환경에서도 동작하도록
-    function localStorageGet(k) { try { return localStorage.getItem(k); } catch { return null; } }
-    function localStorageSet(k, v) { try { localStorage.setItem(k, v); } catch {} }
+    // 예전 버전이 기억해 둔 이름 지우기 (공용 컴퓨터에서 남의 이름으로 제출되지 않도록)
+    try { localStorage.removeItem('filego-name'); } catch {}
 
     load();
   </script>
