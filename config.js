@@ -1,5 +1,5 @@
 // ★ Apps Script 웹 앱 URL — 배포 후 나오는 주소(…/exec)를 붙여넣으세요
-const GAS_URL = '';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbzpZCUULOY0IBtBvshfsgNmJZLZhX1ai5Tnee9Mod5uiKi0ATkoumUYnR4jP2oQJLpHPA/exec';
 
 // 사이트 상단에 표시할 학교 이름
 const SCHOOL_NAME = '영도초등학교';
