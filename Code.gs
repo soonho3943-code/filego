@@ -62,7 +62,7 @@ function doPost(e) {
   const adminActions = {
     adminLogin: () => ({}),
     adminList, adminDetail, create, update, remove, setStatus,
-    getRoster, saveRoster, zip,
+    getRoster, saveRoster, zip, removeSubmission,
   };
 
   try {
@@ -194,6 +194,19 @@ function update(req) {
 function remove(req) {
   const c = mustCollection_(req.cid);
   sheet_(SHEET_COLLECTIONS).deleteRow(c.row);
+  return {};
+}
+
+/** 한 사람의 제출을 취소합니다. 파일은 휴지통으로 옮겨져 30일 안에는 복구할 수 있습니다. */
+function removeSubmission(req) {
+  mustCollection_(req.cid);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    removeSubmissions_(req.cid, req.name);
+  } finally {
+    lock.releaseLock();
+  }
   return {};
 }
 

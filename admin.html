@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>파일 취합 관리</title>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=4" />
+  <link rel="stylesheet" href="style.css?v=5" />
   <style>
     .hero { padding: 26px 20px 22px; }
     .toolbar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
@@ -119,7 +119,7 @@
 
   <div class="toast" id="toast"></div>
 
-  <script src="config.js?v=4"></script>
+  <script src="config.js?v=5"></script>
   <script>
     let password = ss('get', 'filego-pw') || '';
     let editId = null;
@@ -210,7 +210,7 @@
       const inTarget = d.submitted.filter(s => !s.outside).length;
       const pct = d.targetCount ? Math.round(inTarget / d.targetCount * 100) : 0;
       const link = new URL('index.html?c=' + encodeURIComponent(c.id), location.href).href;
-      window._detail = { c, link, missing: d.missing };
+      window._detail = { c, link, missing: d.missing, submitted: d.submitted };
 
       document.getElementById('detail-body').innerHTML = `
         <div class="card">
@@ -248,12 +248,13 @@
 
         <div class="card">
           <div class="sec-title">✅ 제출 ${d.submitted.length}명</div>
-          ${d.submitted.length ? d.submitted.map(s => `
+          ${d.submitted.length ? d.submitted.map((s, i) => `
             <div class="sub-item">
               <div class="row between">
-                <span><b>${esc(s.name)}</b> <span class="meta">${esc(s.dept)}</span>
+                <span class="grow"><b>${esc(s.name)}</b> <span class="meta">${esc(s.dept)}</span>
                   ${s.outside ? '<span class="badge gray">명단 외</span>' : ''}</span>
                 <span class="meta">${timeText(s.time)}</span>
+                <button class="btn danger sm" onclick="removeSubmission(${i})">삭제</button>
               </div>
               ${s.files.map(f => `<a href="${esc(f.url)}" target="_blank">📄 ${esc(f.name)}</a>`).join('')}
             </div>`).join('') : '<div class="meta">아직 제출한 사람이 없습니다.</div>'}
@@ -264,6 +265,14 @@
       if (!ms) return '';
       const d = new Date(ms);
       return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    }
+
+    async function removeSubmission(i) {
+      const { c, submitted } = window._detail;
+      const s = submitted[i];
+      if (!confirm(`${s.name} 선생님의 제출을 삭제할까요?\n파일 ${s.files.length}개가 드라이브 휴지통으로 옮겨지고, 미제출로 바뀝니다.`)) return;
+      try { await adminApi('removeSubmission', { cid: c.id, name: s.name }); toast('삭제했습니다.'); openDetail(c.id); }
+      catch (e) { toast(e.message); }
     }
 
     function copyMissing() {
