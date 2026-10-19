@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>파일 제출</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    .done-box { text-align: center; padding: 40px 20px; }
+    .done-box .icon { font-size: 54px; margin-bottom: 8px; }
+    .done-box .title { font-size: 20px; }
+    .done-box .files { text-align: left; max-width: 420px; margin: 18px auto 24px; }
+    .already { margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <div class="hero-badge" id="school"></div>
+    <div class="hero-title">📮 파일 제출</div>
+    <div class="hero-sub">제출할 항목을 고르고 파일을 올려주세요</div>
+  </header>
+
+  <main class="wrap">
+    <!-- 1. 취합 목록 -->
+    <section id="view-list">
+      <div class="state"><div class="spinner"></div>불러오는 중...</div>
+    </section>
+
+    <!-- 2. 제출 화면 -->
+    <section id="view-form" class="hidden">
+      <button class="back" onclick="goList()">← 목록으로</button>
+      <div class="card">
+        <div class="row between">
+          <div class="title" id="f-title"></div>
+          <span id="f-dday"></span>
+        </div>
+        <div class="meta" id="f-deadline"></div>
+        <div class="desc" id="f-desc"></div>
+      </div>
+
+      <div class="card">
+        <label class="lbl"><span class="num">1</span>이름 선택</label>
+        <select class="input" id="f-name" onchange="onNameChange()"></select>
+        <div id="f-already" class="notice ok already hidden"></div>
+
+        <label class="lbl"><span class="num">2</span>파일 선택</label>
+        <div class="drop" id="drop">
+          <div class="big">📎</div>
+          파일을 여기로 끌어놓거나 <strong>눌러서 선택</strong>하세요<br />
+          <span class="meta">여러 개 선택 가능 · 1개당 최대 <span id="maxmb"></span>MB</span>
+        </div>
+        <input type="file" id="file-input" multiple hidden />
+        <ul class="files" id="file-list"></ul>
+
+        <div style="margin-top:22px">
+          <button class="btn block" id="submit-btn" onclick="submitFiles()" disabled>제출하기</button>
+        </div>
+        <div class="progress hidden" id="progress"><div></div></div>
+        <div class="notice hidden" id="msg"></div>
+      </div>
+    </section>
+
+    <!-- 3. 완료 -->
+    <section id="view-done" class="hidden">
+      <div class="card done-box">
+        <div class="icon">✅</div>
+        <div class="title">제출이 완료되었습니다</div>
+        <div class="meta" id="d-sub"></div>
+        <ul class="files" id="d-files"></ul>
+        <button class="btn ghost" onclick="goList()">다른 항목 제출하기</button>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="config.js"></script>
+  <script>
+    let data = { collections: [], roster: [] };
+    let current = null;     // 선택한 취합
+    let picked = [];        // 선택한 파일들
+
+    document.getElementById('school').textContent = SCHOOL_NAME;
+    document.getElementById('maxmb').textContent = MAX_FILE_MB;
+
+    // ── 화면 전환 ──
+    function show(id) {
+      ['view-list', 'view-form', 'view-done'].forEach(v => document.getElementById(v).classList.toggle('hidden', v !== id));
+      window.scrollTo(0, 0);
+    }
+
+    function goList() {
+      history.replaceState(null, '', location.pathname);
+      current = null;
+      load();
+    }
+
+    // ── 목록 ──
+    async function load() {
+      show('view-list');
+      const el = document.getElementById('view-list');
+      el.innerHTML = '<div class="state"><div class="spinner"></div>불러오는 중...</div>';
+      try {
+        data = await api('list');
+      } catch (e) {
+        el.innerHTML = `<div class="state"><div class="icon">❌</div>불러오지 못했습니다.<br>${esc(e.message)}<br><br>
+          <button class="btn ghost" onclick="load()">다시 시도</button></div>`;
+        return;
+      }
+
+      // 링크에 ?c=ID 가 있으면 바로 제출 화면으로
+      const cid = new URLSearchParams(location.search).get('c');
+      if (cid) {
+        const c = data.collections.find(x => x.id === cid);
+        if (c) return openForm(c.id);
+        el.innerHTML = `<div class="state"><div class="icon">🔒</div>마감되었거나 없는 항목입니다.<br><br>
+          <button class="btn ghost" onclick="goList()">진행 중인 항목 보기</button></div>`;
+        return;
+      }
+
+      if (!data.collections.length) {
+        el.innerHTML = '<div class="state"><div class="icon">📭</div>지금 제출할 항목이 없습니다.</div>';
+        return;
+      }
+
+      el.innerHTML = data.collections.map(c => `
+        <div class="card click" onclick="openForm('${esc(c.id)}')">
+          <div class="row between">
+            <div class="title grow">${esc(c.title)}</div>
+            ${ddayBadge(c.deadline)}
+          </div>
+          <div class="row between" style="margin-top:6px">
+            <span class="meta">${c.deadline ? '마감 ' + formatDate(c.deadline) : '마감일 없음'}</span>
+            <span class="meta">제출 ${c.submitted.length}/${data.roster.length}명</span>
+          </div>
+        </div>`).join('');
+    }
+
+    function ddayBadge(deadline) {
+      const d = dday(deadline);
+      if (!d) return '';
+      const cls = d === '마감일 지남' ? 'over' : (d === 'D-Day' || d === 'D-1' || d === 'D-2') ? 'urgent' : '';
+      return `<span class="badge ${cls}">${d}</span>`;
+    }
+
+    // ── 제출 화면 ──
+    function openForm(cid) {
+      current = data.collections.find(c => c.id === cid);
+      if (!current) return;
+      history.replaceState(null, '', '?c=' + encodeURIComponent(cid));
+
+      document.getElementById('f-title').textContent = current.title;
+      document.getElementById('f-dday').innerHTML = ddayBadge(current.deadline);
+      document.getElementById('f-deadline').textContent = current.deadline ? '마감 ' + formatDate(current.deadline) : '';
+      document.getElementById('f-desc').textContent = current.desc;
+      document.getElementById('f-desc').classList.toggle('hidden', !current.desc);
+
+      // 소속별로 묶어서 표시
+      const groups = {};
+      data.roster.forEach(r => (groups[r.dept || '기타'] = groups[r.dept || '기타'] || []).push(r.name));
+      const saved = localStorageGet('filego-name');
+      const opt = n => `<option value="${esc(n)}" ${n === saved ? 'selected' : ''}>${esc(n)}${current.submitted.includes(n) ? '  ✅' : ''}</option>`;
+      const keys = Object.keys(groups);
+      document.getElementById('f-name').innerHTML = '<option value="">이름을 선택하세요</option>' +
+        (keys.length === 1 && keys[0] === '기타'
+          ? groups['기타'].map(opt).join('')
+          : keys.map(k => `<optgroup label="${esc(k)}">${groups[k].map(opt).join('')}</optgroup>`).join(''));
+
+      picked = [];
+      renderFiles();
+      setMsg('');
+      document.getElementById('progress').classList.add('hidden');
+      onNameChange();
+      show('view-form');
+    }
+
+    function onNameChange() {
+      const name = document.getElementById('f-name').value;
+      const el = document.getElementById('f-already');
+      const done = name && current.submitted.includes(name);
+      el.classList.toggle('hidden', !done);
+      if (done) el.textContent = '이미 제출하셨습니다. 다시 제출하면 이전 파일은 새 파일로 교체됩니다.';
+      updateSubmitBtn();
+    }
+
+    // ── 파일 선택 ──
+    const drop = document.getElementById('drop');
+    const input = document.getElementById('file-input');
+    drop.addEventListener('click', () => input.click());
+    input.addEventListener('change', () => { addFiles(input.files); input.value = ''; });
+    drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+    drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); addFiles(e.dataTransfer.files); });
+
+    function addFiles(list) {
+      for (const f of list) {
+        if (f.size > MAX_FILE_MB * 1024 * 1024) { toast(`'${f.name}'은(는) ${MAX_FILE_MB}MB를 넘어 올릴 수 없습니다.`); continue; }
+        if (picked.some(p => p.name === f.name && p.size === f.size)) continue;
+        picked.push(f);
+      }
+      renderFiles();
+    }
+
+    function removeFile(i) { picked.splice(i, 1); renderFiles(); }
+
+    function renderFiles() {
+      document.getElementById('file-list').innerHTML = picked.map((f, i) => `
+        <li><span>📄</span><span class="fname">${esc(f.name)}</span>
+          <span class="meta">${sizeText(f.size)}</span>
+          <button class="x" onclick="removeFile(${i})" title="빼기">×</button></li>`).join('');
+      updateSubmitBtn();
+    }
+
+    function sizeText(b) {
+      return b < 1024 * 1024 ? Math.max(1, Math.round(b / 1024)) + 'KB' : (b / 1024 / 1024).toFixed(1) + 'MB';
+    }
+
+    function updateSubmitBtn() {
+      document.getElementById('submit-btn').disabled = !(document.getElementById('f-name').value && picked.length);
+    }
+
+    // ── 제출 ──
+    async function submitFiles() {
+      const name = document.getElementById('f-name').value;
+      if (!name || !picked.length) return;
+      const btn = document.getElementById('submit-btn');
+      const bar = document.getElementById('progress');
+      btn.disabled = true;
+      bar.classList.remove('hidden');
+      setBar(0);
+      setMsg('');
+
+      const results = [];
+      try {
+        for (let i = 0; i < picked.length; i++) {
+          const f = picked[i];
+          btn.textContent = `올리는 중... (${i + 1}/${picked.length})`;
+          const r = await api('upload', {
+            cid: current.id, name,
+            filename: f.name, mime: f.type, data: await toBase64(f),
+            first: i === 0, index: i + 1, total: picked.length,
+          });
+          results.push(r.file);
+          setBar((i + 1) / picked.length * 100);
+        }
+      } catch (e) {
+        setMsg('제출 중 문제가 생겼습니다: ' + e.message + '\n다시 제출해주세요.', 'err');
+        btn.textContent = '다시 제출하기';
+        btn.disabled = false;
+        return;
+      }
+
+      localStorageSet('filego-name', name);
+      btn.textContent = '제출하기';
+      document.getElementById('d-sub').textContent = `${name} 선생님 · ${current.title}`;
+      document.getElementById('d-files').innerHTML = results.map(n => `<li><span>📄</span><span class="fname">${esc(n)}</span></li>`).join('');
+      show('view-done');
+    }
+
+    function toBase64(file) {
+      return new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result).split(',')[1]);
+        r.onerror = () => reject(new Error('파일을 읽지 못했습니다.'));
+        r.readAsDataURL(file);
+      });
+    }
+
+    function setBar(p) { document.querySelector('#progress > div').style.width = p + '%'; }
+
+    function setMsg(text, type = 'info') {
+      const el = document.getElementById('msg');
+      el.className = 'notice ' + type + (text ? '' : ' hidden');
+      el.style.whiteSpace = 'pre-wrap';
+      el.textContent = text;
+    }
+
+    function toast(text) {
+      const t = document.getElementById('toast');
+      t.textContent = text;
+      t.classList.add('show');
+      clearTimeout(t._h);
+      t._h = setTimeout(() => t.classList.remove('show'), 2500);
+    }
+
+    // 이름 기억(다음 제출 때 자동 선택) — 저장이 막힌 환경에서도 동작하도록
+    function localStorageGet(k) { try { return localStorage.getItem(k); } catch { return null; } }
+    function localStorageSet(k, v) { try { localStorage.setItem(k, v); } catch {} }
+
+    load();
+  </script>
+</body>
+</html>

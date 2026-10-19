@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>파일 취합 관리</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    .hero { padding: 26px 20px 22px; }
+    .toolbar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .toolbar .btn { flex: 1; min-width: 140px; }
+    .count { font-size: 22px; font-weight: 700; color: var(--blue); }
+    .count small { font-size: 14px; color: var(--muted); font-weight: 500; }
+    .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+    .sec-title { font-size: 15px; font-weight: 700; margin-bottom: 10px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip { background: var(--red-soft); color: var(--red); font-size: 13px; font-weight: 600; padding: 5px 11px; border-radius: 20px; }
+    .chip small { font-weight: 400; opacity: .75; margin-left: 3px; }
+    .sub-item { padding: 10px 0; border-top: 1px solid #eef2f7; }
+    .sub-item:first-child { border-top: none; }
+    .sub-item a { color: var(--blue); text-decoration: none; font-size: 13px; display: inline-block; margin: 3px 10px 0 0; word-break: break-all; }
+    .sub-item a:hover { text-decoration: underline; }
+    .closed { opacity: .7; }
+
+    .roster-table { width: 100%; border-collapse: collapse; }
+    .roster-table td { padding: 4px 3px; }
+    .roster-table td.n { width: 28px; color: var(--muted); font-size: 12px; text-align: right; padding-right: 6px; }
+    .roster-table td.del { width: 36px; }
+    .roster-table .input { padding: 8px 10px; }
+    .roster-table .x { background: none; border: none; color: var(--muted); font-size: 20px; }
+    .roster-table .x:hover { color: var(--red); }
+    .sticky-save { position: sticky; bottom: 0; background: var(--bg); padding: 12px 0; }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <div class="hero-badge" id="school"></div>
+    <div class="hero-title">🗂️ 파일 취합 관리</div>
+  </header>
+
+  <main class="wrap">
+    <!-- 로그인 -->
+    <section id="v-login" class="hidden">
+      <div class="card" style="max-width:380px;margin:30px auto">
+        <label class="lbl" style="margin-top:0">관리자 비밀번호</label>
+        <input class="input" type="password" id="pw" onkeydown="if(event.key==='Enter')login()" />
+        <div style="margin-top:14px"><button class="btn block" onclick="login()">들어가기</button></div>
+        <div class="notice err hidden" id="login-msg"></div>
+      </div>
+    </section>
+
+    <!-- 취합 목록 -->
+    <section id="v-list" class="hidden">
+      <div class="toolbar">
+        <button class="btn" onclick="openEdit()">＋ 새 취합 만들기</button>
+        <button class="btn ghost" onclick="openRoster()">👥 교사 명단 관리</button>
+      </div>
+      <div id="list-body"></div>
+    </section>
+
+    <!-- 취합 상세 -->
+    <section id="v-detail" class="hidden">
+      <button class="back" onclick="openList()">← 목록으로</button>
+      <div id="detail-body"></div>
+    </section>
+
+    <!-- 새 취합 / 수정 -->
+    <section id="v-edit" class="hidden">
+      <button class="back" onclick="editId ? openDetail(editId) : openList()">← 돌아가기</button>
+      <div class="card">
+        <div class="title" id="edit-heading">새 취합 만들기</div>
+        <label class="lbl">제목</label>
+        <input class="input" id="e-title" placeholder="예) 2학기 연수 이수증" />
+        <label class="lbl">안내문 <span class="meta">(선택)</span></label>
+        <textarea class="input" id="e-desc" placeholder="예) 2026년 2학기 이수한 연수의 이수증을 PDF로 올려주세요."></textarea>
+        <label class="lbl">마감일 <span class="meta">(선택)</span></label>
+        <input class="input" type="date" id="e-deadline" />
+        <div style="margin-top:20px"><button class="btn block" id="e-save" onclick="saveEdit()">만들기</button></div>
+        <div class="notice err hidden" id="e-msg"></div>
+      </div>
+    </section>
+
+    <!-- 교사 명단 -->
+    <section id="v-roster" class="hidden">
+      <button class="back" onclick="openList()">← 목록으로</button>
+      <div class="card">
+        <div class="row between">
+          <div class="title">👥 교사 명단</div>
+          <span class="meta" id="r-count"></span>
+        </div>
+        <div class="notice info">
+          인사발령이 있으면 여기서 고치고 <b>저장</b>을 누르세요.<br />
+          · 진행 중인 취합은 바뀐 명단으로 바로 집계됩니다.<br />
+          · 마감한 취합은 마감 당시 명단 그대로 남습니다.<br />
+          · 동명이인은 <b>김민지(3-1)</b>처럼 이름을 구분해주세요.
+        </div>
+        <table class="roster-table" style="margin-top:14px">
+          <thead><tr><td></td><td class="meta">이름</td><td class="meta">소속 (학년·부서)</td><td></td></tr></thead>
+          <tbody id="r-body"></tbody>
+        </table>
+        <div class="actions">
+          <button class="btn ghost sm" onclick="addRosterRow()">＋ 한 명 추가</button>
+          <button class="btn ghost sm" onclick="togglePaste()">📋 엑셀에서 한꺼번에 붙여넣기</button>
+        </div>
+        <div id="paste-box" class="hidden" style="margin-top:12px">
+          <textarea class="input" id="paste" rows="8" placeholder="엑셀에서 [이름 | 소속] 두 칸을 복사해 붙여넣으세요.&#10;한 줄에 한 명입니다.&#10;&#10;김민지	1학년&#10;이서준	2학년"></textarea>
+          <div class="actions">
+            <button class="btn sm" onclick="applyPaste(false)">아래에 추가</button>
+            <button class="btn danger sm" onclick="applyPaste(true)">기존 명단을 이걸로 교체</button>
+          </div>
+        </div>
+      </div>
+      <div class="sticky-save">
+        <button class="btn block" id="r-save" onclick="saveRoster()">명단 저장</button>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="config.js"></script>
+  <script>
+    let password = ss('get', 'filego-pw') || '';
+    let editId = null;
+    let roster = [];
+
+    document.getElementById('school').textContent = SCHOOL_NAME;
+
+    function ss(op, k, v) {
+      try { return op === 'get' ? sessionStorage.getItem(k) : op === 'set' ? sessionStorage.setItem(k, v) : sessionStorage.removeItem(k); }
+      catch { return null; }
+    }
+
+    function adminApi(action, payload = {}) {
+      return api(action, { ...payload, password }).catch(e => {
+        if (e.message.includes('비밀번호')) { ss('del', 'filego-pw'); show('v-login'); }
+        throw e;
+      });
+    }
+
+    function show(id) {
+      ['v-login', 'v-list', 'v-detail', 'v-edit', 'v-roster'].forEach(v => document.getElementById(v).classList.toggle('hidden', v !== id));
+      window.scrollTo(0, 0);
+    }
+
+    function loading(elId) {
+      document.getElementById(elId).innerHTML = '<div class="state"><div class="spinner"></div>불러오는 중...</div>';
+    }
+
+    function errorBox(elId, e, retry) {
+      document.getElementById(elId).innerHTML = `<div class="state"><div class="icon">❌</div>${esc(e.message)}<br><br>
+        <button class="btn ghost" onclick="${retry}">다시 시도</button></div>`;
+    }
+
+    // ── 로그인 ──
+    async function login() {
+      password = document.getElementById('pw').value;
+      const msg = document.getElementById('login-msg');
+      msg.classList.add('hidden');
+      try {
+        await api('adminLogin', { password });
+        ss('set', 'filego-pw', password);
+        openList();
+      } catch (e) {
+        msg.textContent = e.message;
+        msg.classList.remove('hidden');
+      }
+    }
+
+    // ── 목록 ──
+    async function openList() {
+      show('v-list');
+      loading('list-body');
+      let res;
+      try { res = await adminApi('adminList'); } catch (e) { return errorBox('list-body', e, 'openList()'); }
+
+      if (!res.collections.length) {
+        document.getElementById('list-body').innerHTML =
+          '<div class="state"><div class="icon">📭</div>아직 만든 취합이 없습니다.<br>「새 취합 만들기」를 눌러 시작하세요.</div>';
+        return;
+      }
+      document.getElementById('list-body').innerHTML = res.collections.map(c => {
+        const open = c.status === '진행';
+        const pct = c.targetCount ? Math.round(c.submittedCount / c.targetCount * 100) : 0;
+        return `
+        <div class="card click ${open ? '' : 'closed'}" onclick="openDetail('${esc(c.id)}')">
+          <div class="row between">
+            <div class="title grow">${esc(c.title)}</div>
+            ${open ? `<span class="badge">${dday(c.deadline) || '진행 중'}</span>` : '<span class="badge gray">마감</span>'}
+          </div>
+          <div class="row between" style="margin-top:6px">
+            <span class="meta">${c.deadline ? '마감 ' + formatDate(c.deadline) : '마감일 없음'}</span>
+            <span class="meta"><b style="color:var(--text)">${c.submittedCount}</b> / ${c.targetCount}명 제출</span>
+          </div>
+          <div class="progress ${pct === 100 ? 'green' : ''}"><div style="width:${pct}%"></div></div>
+        </div>`;
+      }).join('');
+    }
+
+    // ── 상세 ──
+    async function openDetail(cid) {
+      show('v-detail');
+      loading('detail-body');
+      let d;
+      try { d = await adminApi('adminDetail', { cid }); } catch (e) { return errorBox('detail-body', e, `openDetail('${cid}')`); }
+
+      const c = d.collection;
+      const open = c.status === '진행';
+      const inTarget = d.submitted.filter(s => !s.outside).length;
+      const pct = d.targetCount ? Math.round(inTarget / d.targetCount * 100) : 0;
+      const link = new URL('index.html?c=' + encodeURIComponent(c.id), location.href).href;
+      window._detail = { c, link, missing: d.missing };
+
+      document.getElementById('detail-body').innerHTML = `
+        <div class="card">
+          <div class="row between">
+            <div class="title grow">${esc(c.title)}</div>
+            ${open ? `<span class="badge">${dday(c.deadline) || '진행 중'}</span>` : '<span class="badge gray">마감</span>'}
+          </div>
+          ${c.deadline ? `<div class="meta">마감 ${formatDate(c.deadline)}</div>` : ''}
+          ${c.desc ? `<div class="desc">${esc(c.desc)}</div>` : ''}
+          <div class="count" style="margin-top:14px">${inTarget} <small>/ ${d.targetCount}명 제출 (${pct}%)</small></div>
+          <div class="progress ${pct === 100 ? 'green' : ''}"><div style="width:${pct}%"></div></div>
+          <div class="actions">
+            <button class="btn sm" onclick="copyText(_detail.link, '제출 링크를 복사했습니다. 메신저에 붙여넣으세요.')">🔗 제출 링크 복사</button>
+            <a class="btn ghost sm" href="${esc(c.folderUrl)}" target="_blank" style="text-decoration:none">📁 드라이브 폴더 열기</a>
+            <button class="btn ghost sm" id="zip-btn" onclick="downloadZip('${esc(c.id)}')">⬇️ ZIP 다운로드</button>
+          </div>
+          <div class="actions">
+            <button class="btn ghost sm" onclick="openEdit('${esc(c.id)}')">✏️ 수정</button>
+            ${open
+              ? `<button class="btn ghost sm" onclick="setStatus('${esc(c.id)}','마감')">🔒 마감하기</button>`
+              : `<button class="btn ghost sm" onclick="setStatus('${esc(c.id)}','진행')">🔓 다시 열기</button>`}
+            <button class="btn danger sm" onclick="removeCollection('${esc(c.id)}')">🗑️ 목록에서 삭제</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="row between">
+            <div class="sec-title">⏳ 미제출 ${d.missing.length}명</div>
+            ${d.missing.length ? `<button class="btn ghost sm" onclick="copyMissing()">명단 복사</button>` : ''}
+          </div>
+          ${d.missing.length
+            ? `<div class="chips">${d.missing.map(m => `<span class="chip">${esc(m.name)}${m.dept ? `<small>${esc(m.dept)}</small>` : ''}</span>`).join('')}</div>`
+            : '<div class="notice ok">🎉 모두 제출했습니다!</div>'}
+        </div>
+
+        <div class="card">
+          <div class="sec-title">✅ 제출 ${d.submitted.length}명</div>
+          ${d.submitted.length ? d.submitted.map(s => `
+            <div class="sub-item">
+              <div class="row between">
+                <span><b>${esc(s.name)}</b> <span class="meta">${esc(s.dept)}</span>
+                  ${s.outside ? '<span class="badge gray">명단 외</span>' : ''}</span>
+                <span class="meta">${timeText(s.time)}</span>
+              </div>
+              ${s.files.map(f => `<a href="${esc(f.url)}" target="_blank">📄 ${esc(f.name)}</a>`).join('')}
+            </div>`).join('') : '<div class="meta">아직 제출한 사람이 없습니다.</div>'}
+        </div>`;
+    }
+
+    function timeText(ms) {
+      if (!ms) return '';
+      const d = new Date(ms);
+      return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    }
+
+    function copyMissing() {
+      const { c, link, missing } = window._detail;
+      const text = `[${c.title}] 아직 제출하지 않으신 선생님: ${missing.map(m => m.name).join(', ')}\n` +
+        (c.deadline ? `마감: ${formatDate(c.deadline)}\n` : '') + `제출하기: ${link}`;
+      copyText(text, '미제출 안내문을 복사했습니다. 메신저에 붙여넣으세요.');
+    }
+
+    async function setStatus(cid, status) {
+      if (status === '마감' && !confirm('마감하면 선생님들이 더 이상 제출할 수 없습니다. 마감할까요?')) return;
+      try { await adminApi('setStatus', { cid, status }); toast(status === '마감' ? '마감했습니다.' : '다시 열었습니다.'); openDetail(cid); }
+      catch (e) { toast(e.message); }
+    }
+
+    async function removeCollection(cid) {
+      if (!confirm('목록에서 삭제할까요?\n드라이브에 올라온 파일은 지워지지 않고 그대로 남습니다.')) return;
+      try { await adminApi('remove', { cid }); toast('삭제했습니다.'); openList(); }
+      catch (e) { toast(e.message); }
+    }
+
+    async function downloadZip(cid) {
+      const btn = document.getElementById('zip-btn');
+      btn.disabled = true;
+      btn.textContent = '묶는 중...';
+      try {
+        const r = await adminApi('zip', { cid });
+        const bytes = Uint8Array.from(atob(r.data), ch => ch.charCodeAt(0));
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([bytes], { type: 'application/zip' }));
+        a.download = r.filename;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      } catch (e) { toast(e.message); }
+      btn.disabled = false;
+      btn.textContent = '⬇️ ZIP 다운로드';
+    }
+
+    // ── 새 취합 / 수정 ──
+    function openEdit(cid) {
+      editId = cid || null;
+      const c = cid && window._detail && window._detail.c.id === cid ? window._detail.c : null;
+      document.getElementById('edit-heading').textContent = c ? '취합 수정' : '새 취합 만들기';
+      document.getElementById('e-save').textContent = c ? '저장' : '만들기';
+      document.getElementById('e-title').value = c ? c.title : '';
+      document.getElementById('e-desc').value = c ? c.desc : '';
+      document.getElementById('e-deadline').value = c ? c.deadline : '';
+      document.getElementById('e-msg').classList.add('hidden');
+      show('v-edit');
+      document.getElementById('e-title').focus();
+    }
+
+    async function saveEdit() {
+      const btn = document.getElementById('e-save');
+      const msg = document.getElementById('e-msg');
+      const payload = {
+        title: document.getElementById('e-title').value.trim(),
+        desc: document.getElementById('e-desc').value.trim(),
+        deadline: document.getElementById('e-deadline').value,
+      };
+      if (!payload.title) { msg.textContent = '제목을 입력해주세요.'; msg.classList.remove('hidden'); return; }
+      btn.disabled = true;
+      try {
+        if (editId) {
+          await adminApi('update', { cid: editId, ...payload });
+          toast('저장했습니다.');
+          openDetail(editId);
+        } else {
+          const r = await adminApi('create', payload);
+          toast('만들었습니다. 「제출 링크 복사」로 선생님들께 안내하세요.');
+          openDetail(r.id);
+        }
+      } catch (e) {
+        msg.textContent = e.message;
+        msg.classList.remove('hidden');
+      }
+      btn.disabled = false;
+    }
+
+    // ── 교사 명단 ──
+    async function openRoster() {
+      show('v-roster');
+      document.getElementById('r-body').innerHTML = '<tr><td colspan="4"><div class="state"><div class="spinner"></div></div></td></tr>';
+      document.getElementById('paste-box').classList.add('hidden');
+      try {
+        roster = (await adminApi('getRoster')).roster;
+        if (!roster.length) roster = [{ name: '', dept: '' }];
+        renderRoster();
+      } catch (e) { toast(e.message); }
+    }
+
+    function renderRoster() {
+      document.getElementById('r-body').innerHTML = roster.map((r, i) => `
+        <tr>
+          <td class="n">${i + 1}</td>
+          <td><input class="input" value="${esc(r.name)}" oninput="roster[${i}].name=this.value;countRoster()" placeholder="이름" /></td>
+          <td><input class="input" value="${esc(r.dept)}" oninput="roster[${i}].dept=this.value" placeholder="예) 3학년" /></td>
+          <td class="del"><button class="x" onclick="roster.splice(${i},1);renderRoster()" title="삭제">×</button></td>
+        </tr>`).join('');
+      countRoster();
+    }
+
+    function countRoster() {
+      document.getElementById('r-count').textContent = roster.filter(r => r.name.trim()).length + '명';
+    }
+
+    function addRosterRow() {
+      roster.push({ name: '', dept: '' });
+      renderRoster();
+      const inputs = document.querySelectorAll('#r-body tr:last-child input');
+      if (inputs[0]) inputs[0].focus();
+    }
+
+    function togglePaste() { document.getElementById('paste-box').classList.toggle('hidden'); }
+
+    function applyPaste(replace) {
+      const lines = document.getElementById('paste').value.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      const rows = lines.map(l => {
+        const [name, ...rest] = l.split(/\t|,/);
+        return { name: (name || '').trim(), dept: rest.join(' ').trim() };
+      }).filter(r => r.name);
+      if (!rows.length) return toast('붙여넣은 내용이 없습니다.');
+      if (replace && !confirm(`기존 명단을 지우고 ${rows.length}명으로 바꿀까요? (저장을 눌러야 반영됩니다)`)) return;
+      roster = replace ? rows : roster.filter(r => r.name.trim()).concat(rows);
+      document.getElementById('paste').value = '';
+      document.getElementById('paste-box').classList.add('hidden');
+      renderRoster();
+      toast(`${rows.length}명을 넣었습니다. 「명단 저장」을 눌러주세요.`);
+    }
+
+    async function saveRoster() {
+      const btn = document.getElementById('r-save');
+      btn.disabled = true;
+      btn.textContent = '저장 중...';
+      try {
+        const r = await adminApi('saveRoster', { roster: roster.filter(x => x.name.trim()) });
+        toast(`${r.count}명으로 저장했습니다.`);
+      } catch (e) { toast(e.message); }
+      btn.disabled = false;
+      btn.textContent = '명단 저장';
+    }
+
+    // ── 공통 ──
+    async function copyText(text, okMsg) {
+      try { await navigator.clipboard.writeText(text); }
+      catch {
+        const t = document.createElement('textarea');
+        t.value = text; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove();
+      }
+      toast(okMsg);
+    }
+
+    function toast(text) {
+      const t = document.getElementById('toast');
+      t.textContent = text;
+      t.classList.add('show');
+      clearTimeout(t._h);
+      t._h = setTimeout(() => t.classList.remove('show'), 2800);
+    }
+
+    if (password) openList(); else show('v-login');
+  </script>
+</body>
+</html>

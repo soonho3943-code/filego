@@ -1,0 +1,162 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --navy: #1a3a6b;
+  --blue: #2563b0;
+  --blue-soft: #e8f0fb;
+  --bg: #f0f4f9;
+  --card: #fff;
+  --line: #dde5f0;
+  --text: #1f2a37;
+  --muted: #7a8a9e;
+  --green: #16a34a;
+  --green-soft: #e7f6ec;
+  --red: #dc2626;
+  --red-soft: #fdecec;
+  --orange: #d97706;
+}
+
+body {
+  font-family: 'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+button, input, select, textarea { font-family: inherit; font-size: inherit; color: inherit; }
+button { cursor: pointer; }
+
+/* ── 헤더 ── */
+.hero {
+  background: linear-gradient(135deg, #1a3a6b 0%, #2563b0 60%, #3b82d4 100%);
+  padding: 36px 20px 30px;
+  text-align: center;
+  color: #fff;
+}
+.hero-badge {
+  display: inline-block;
+  background: rgba(255,255,255,0.18);
+  border: 1px solid rgba(255,255,255,0.25);
+  font-size: 12px; font-weight: 600; letter-spacing: 1px;
+  padding: 4px 12px; border-radius: 20px; margin-bottom: 12px;
+}
+.hero-title { font-size: 26px; font-weight: 700; letter-spacing: -0.5px; }
+.hero-sub { font-size: 14px; color: rgba(255,255,255,0.75); margin-top: 6px; }
+
+.wrap { max-width: 720px; margin: 0 auto; padding: 20px 16px 60px; }
+
+/* ── 카드 ── */
+.card {
+  background: var(--card);
+  border-radius: 14px;
+  box-shadow: 0 1px 3px rgba(26,58,107,0.08);
+  padding: 20px;
+  margin-bottom: 14px;
+}
+.card.click { cursor: pointer; transition: transform .15s, box-shadow .15s; border: 1.5px solid transparent; }
+.card.click:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(26,58,107,0.12); border-color: var(--blue-soft); }
+
+.row { display: flex; align-items: center; gap: 10px; }
+.row.between { justify-content: space-between; }
+.grow { flex: 1; min-width: 0; }
+
+.title { font-size: 17px; font-weight: 700; }
+.desc { font-size: 14px; color: #4b5b70; white-space: pre-wrap; margin-top: 6px; }
+.meta { font-size: 13px; color: var(--muted); }
+
+.badge {
+  display: inline-block; font-size: 12px; font-weight: 700;
+  padding: 3px 10px; border-radius: 20px; white-space: nowrap;
+  background: var(--blue-soft); color: var(--blue);
+}
+.badge.urgent { background: #fff4e5; color: var(--orange); }
+.badge.over { background: var(--red-soft); color: var(--red); }
+.badge.done { background: var(--green-soft); color: var(--green); }
+.badge.gray { background: #eef1f5; color: var(--muted); }
+
+/* ── 버튼 ── */
+.btn {
+  border: none; border-radius: 10px;
+  padding: 11px 18px; font-weight: 600;
+  background: var(--blue); color: #fff;
+  transition: background .15s, opacity .15s;
+}
+.btn:hover { background: var(--navy); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn.block { width: 100%; padding: 14px; font-size: 16px; }
+.btn.ghost { background: #fff; color: var(--blue); border: 1.5px solid var(--line); }
+.btn.ghost:hover { background: var(--blue-soft); }
+.btn.danger { background: #fff; color: var(--red); border: 1.5px solid #f3c9c9; }
+.btn.danger:hover { background: var(--red-soft); }
+.btn.sm { padding: 6px 12px; font-size: 13px; border-radius: 8px; }
+
+.back { background: none; border: none; color: var(--blue); font-weight: 600; padding: 4px 0; margin-bottom: 12px; }
+
+/* ── 입력 ── */
+label.lbl { display: block; font-size: 14px; font-weight: 700; margin: 18px 0 8px; }
+label.lbl .num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--blue); color: #fff; font-size: 12px; margin-right: 6px;
+}
+.input, select.input, textarea.input {
+  width: 100%; padding: 12px 14px;
+  border: 1.5px solid var(--line); border-radius: 10px; background: #fff;
+  outline: none; transition: border-color .15s;
+}
+.input:focus { border-color: var(--blue); }
+textarea.input { resize: vertical; min-height: 90px; }
+
+/* ── 파일 놓는 곳 ── */
+.drop {
+  border: 2px dashed #c3d3e8; border-radius: 12px;
+  padding: 28px 16px; text-align: center; color: var(--muted);
+  cursor: pointer; transition: background .15s, border-color .15s;
+}
+.drop:hover, .drop.over { background: var(--blue-soft); border-color: var(--blue); color: var(--blue); }
+.drop .big { font-size: 30px; margin-bottom: 6px; }
+.drop strong { color: var(--blue); }
+
+.files { list-style: none; margin-top: 10px; }
+.files li {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 12px; background: #f6f9fd; border-radius: 8px; margin-top: 6px; font-size: 14px;
+}
+.files li .fname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.files li .x { background: none; border: none; color: var(--muted); font-size: 18px; line-height: 1; padding: 0 4px; }
+.files li .x:hover { color: var(--red); }
+
+/* ── 상태 메시지 ── */
+.state { text-align: center; padding: 50px 20px; color: var(--muted); }
+.state .icon { font-size: 40px; margin-bottom: 10px; }
+.spinner {
+  width: 30px; height: 30px; margin: 0 auto 12px;
+  border: 3px solid var(--line); border-top-color: var(--blue); border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.notice { font-size: 13px; padding: 10px 12px; border-radius: 8px; margin-top: 10px; }
+.notice.info { background: var(--blue-soft); color: var(--blue); }
+.notice.ok { background: var(--green-soft); color: var(--green); }
+.notice.err { background: var(--red-soft); color: var(--red); }
+
+.progress { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; margin-top: 12px; }
+.progress > div { height: 100%; background: var(--blue); width: 0; transition: width .3s; }
+.progress.green > div { background: var(--green); }
+
+.toast {
+  position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+  background: #1f2a37; color: #fff; padding: 10px 18px; border-radius: 10px;
+  font-size: 14px; opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 100;
+}
+.toast.show { opacity: 1; }
+
+.hidden { display: none !important; }
+
+@media (max-width: 480px) {
+  .hero-title { font-size: 22px; }
+  .card { padding: 16px; }
+}
