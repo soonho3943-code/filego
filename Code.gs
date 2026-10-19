@@ -62,7 +62,7 @@ function doPost(e) {
   const adminActions = {
     adminLogin: () => ({}),
     adminList, adminDetail, create, update, remove, setStatus,
-    getRoster, saveRoster, zip, removeSubmission,
+    getRoster, saveRoster, zip, removeSubmission, getFile,
   };
 
   try {
@@ -154,6 +154,7 @@ function adminDetail(req) {
     name: n,
     dept: rosterDept[n] || '',
     outside: !targets.includes(n),
+    order: targets.includes(n) ? targets.indexOf(n) : targets.length, // 명단 순서 (PDF 합치기용)
     time: subs[n].time,
     files: subs[n].files,
   })).sort((a, b) => b.time - a.time);
@@ -270,6 +271,15 @@ function zip(req) {
   return { filename: zipName, data: Utilities.base64Encode(z.getBytes()) };
 }
 
+/** 제출된 파일 1개를 돌려줍니다 (관리자 화면에서 PDF 합치기용). */
+function getFile(req) {
+  const c = mustCollection_(req.cid);
+  if (!readSubmissions_().some(s => s.cid === c.id && s.fileId === req.fileId)) throw new Error('이 취합에 제출된 파일이 아닙니다.');
+  const f = DriveApp.getFileById(req.fileId);
+  const blob = f.getBlob();
+  return { name: f.getName(), mime: blob.getContentType(), data: Utilities.base64Encode(blob.getBytes()) };
+}
+
 // ───────────────────────── 내부 함수 ─────────────────────────
 
 function json_(obj) {
@@ -331,7 +341,7 @@ function submittedMap_() {
     const byName = map[s.cid] = map[s.cid] || {};
     const entry = byName[s.name] = byName[s.name] || { time: 0, files: [] };
     entry.time = Math.max(entry.time, s.time);
-    entry.files.push({ name: s.file, url: 'https://drive.google.com/file/d/' + s.fileId + '/view' });
+    entry.files.push({ id: s.fileId, name: s.file, url: 'https://drive.google.com/file/d/' + s.fileId + '/view' });
   });
   return map;
 }
