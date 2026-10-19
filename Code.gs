@@ -79,20 +79,15 @@ function doPost(e) {
 
 // ───────────────────────── 선생님용 ─────────────────────────
 
-/** 진행 중인 취합 목록 + 교사 명단 + 취합별 제출 인원 (누가 냈는지는 보내지 않음) */
+/** 진행 중인 취합 목록 + 교사 명단 (제출 현황은 보내지 않음) */
 function list() {
-  const submitted = submittedMap_();
-  const roster = readRoster_();
   const collections = readCollections_()
     .filter(c => c.status === STATUS_OPEN)
-    .map(c => ({
-      id: c.id, title: c.title, desc: c.desc, deadline: c.deadline,
-      submittedCount: roster.filter(r => (submitted[c.id] || {})[r.name]).length,
-    }));
-  return { collections, roster };
+    .map(c => ({ id: c.id, title: c.title, desc: c.desc, deadline: c.deadline }));
+  return { collections, roster: readRoster_() };
 }
 
-/** 제출 직전에 그 사람이 이미 냈는지만 확인 */
+/** 이름을 고른 사람이 이미 냈는지만 확인 */
 function check(req) {
   return { submitted: !!(submittedMap_()[req.cid] || {})[req.name] };
 }

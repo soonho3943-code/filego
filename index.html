@@ -5,12 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>파일 제출</title>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=3" />
+  <link rel="stylesheet" href="style.css?v=4" />
   <style>
     .done-box { text-align: center; padding: 40px 20px; }
     .done-box .icon { font-size: 54px; margin-bottom: 8px; }
     .done-box .title { font-size: 20px; }
     .done-box .files { text-align: left; max-width: 420px; margin: 18px auto 24px; }
+    .already { margin-top: 10px; }
   </style>
 </head>
 <body>
@@ -40,7 +41,8 @@
 
       <div class="card">
         <label class="lbl"><span class="num">1</span>이름 선택</label>
-        <select class="input" id="f-name" onchange="updateSubmitBtn()"></select>
+        <select class="input" id="f-name" onchange="onNameChange()"></select>
+        <div id="f-already" class="notice ok already hidden"></div>
 
         <label class="lbl"><span class="num">2</span>파일 선택</label>
         <div class="drop" id="drop">
@@ -73,7 +75,7 @@
 
   <div class="toast" id="toast"></div>
 
-  <script src="config.js?v=3"></script>
+  <script src="config.js?v=4"></script>
   <script>
     let data = { collections: [], roster: [] };
     let current = null;     // 선택한 취합
@@ -128,10 +130,7 @@
             <div class="title grow">${esc(c.title)}</div>
             ${ddayBadge(c.deadline)}
           </div>
-          <div class="row between" style="margin-top:6px">
-            <span class="meta">${c.deadline ? '마감 ' + formatDate(c.deadline) : '마감일 없음'}</span>
-            <span class="meta">제출 ${c.submittedCount ?? (c.submitted || []).length}/${data.roster.length}명</span>
-          </div>
+          <div class="meta" style="margin-top:6px">${c.deadline ? '마감 ' + formatDate(c.deadline) : '마감일 없음'}</div>
         </div>`).join('');
     }
 
@@ -169,8 +168,30 @@
       renderFiles();
       setMsg('');
       document.getElementById('progress').classList.add('hidden');
-      updateSubmitBtn();
+      onNameChange();
       show('view-form');
+    }
+
+    // 명단에는 제출 여부를 표시하지 않고, 이름을 고른 뒤에 본인 것만 확인
+    async function checkSubmitted(name) {
+      try { return (await api('check', { cid: current.id, name })).submitted; }
+      catch (e) {
+        if (e.message.includes('알 수 없는')) return (current.submitted || []).includes(name); // 서버 코드 업데이트 전 호환
+        throw e;
+      }
+    }
+
+    async function onNameChange() {
+      const name = document.getElementById('f-name').value;
+      const el = document.getElementById('f-already');
+      el.classList.add('hidden');
+      updateSubmitBtn();
+      if (!name) return;
+      let done = false;
+      try { done = await checkSubmitted(name); } catch { return; }
+      if (document.getElementById('f-name').value !== name) return; // 그사이 다른 이름을 고름
+      el.classList.toggle('hidden', !done);
+      if (done) el.textContent = '이미 제출하셨습니다. 다시 제출하면 이전 파일은 새 파일로 교체됩니다.';
     }
 
     // ── 파일 선택 ──
@@ -218,18 +239,14 @@
       btn.disabled = true;
       setMsg('');
 
-      // 이미 냈는지는 제출 버튼을 누른 본인에게만 확인
       btn.textContent = '확인 중...';
       let already;
-      try { already = (await api('check', { cid: current.id, name })).submitted; }
+      try { already = await checkSubmitted(name); }
       catch (e) {
-        if (!e.message.includes('알 수 없는')) {
-          setMsg('확인 중 문제가 생겼습니다: ' + e.message, 'err');
-          btn.textContent = '제출하기';
-          btn.disabled = false;
-          return;
-        }
-        already = (current.submitted || []).includes(name); // 서버 코드 업데이트 전 호환
+        setMsg('확인 중 문제가 생겼습니다: ' + e.message, 'err');
+        btn.textContent = '제출하기';
+        btn.disabled = false;
+        return;
       }
       if (already && !confirm(`${name} 선생님은 이미 제출했습니다.\n새 파일로 교체할까요?`)) {
         btn.textContent = '제출하기';
