@@ -58,7 +58,7 @@ function doPost(e) {
     return json_({ ok: false, error: '잘못된 요청입니다.' });
   }
 
-  const publicActions = { list, upload };
+  const publicActions = { list, check, upload };
   const adminActions = {
     adminLogin: () => ({}),
     adminList, adminDetail, create, update, remove, setStatus,
@@ -79,16 +79,22 @@ function doPost(e) {
 
 // ───────────────────────── 선생님용 ─────────────────────────
 
-/** 진행 중인 취합 목록 + 교사 명단 + 취합별 제출자 */
+/** 진행 중인 취합 목록 + 교사 명단 + 취합별 제출 인원 (누가 냈는지는 보내지 않음) */
 function list() {
   const submitted = submittedMap_();
+  const roster = readRoster_();
   const collections = readCollections_()
     .filter(c => c.status === STATUS_OPEN)
     .map(c => ({
       id: c.id, title: c.title, desc: c.desc, deadline: c.deadline,
-      submitted: Object.keys(submitted[c.id] || {}),
+      submittedCount: roster.filter(r => (submitted[c.id] || {})[r.name]).length,
     }));
-  return { collections, roster: readRoster_() };
+  return { collections, roster };
+}
+
+/** 제출 직전에 그 사람이 이미 냈는지만 확인 */
+function check(req) {
+  return { submitted: !!(submittedMap_()[req.cid] || {})[req.name] };
 }
 
 /**
