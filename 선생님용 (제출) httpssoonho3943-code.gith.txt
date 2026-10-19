@@ -1,0 +1,7 @@
+선생님용 (제출): https://soonho3943-code.github.io/filego/
+관리자용: https://soonho3943-code.github.io/filego/admin.html
+참고로 다른 주소들도 적어둘게요.
+
+GitHub 저장소: https://github.com/soonho3943-code/filego
+Apps Script 서버(웹 앱): https://script.google.com/macros/s/AKfycbzpZCUULOY0IBtBvshfsgNmJZLZhX1ai5Tnee9Mod5uiKi0ATkoumUYnR4jP2oQJLpHPA/exec
+Apps Script 코드를 고칠 때는 위 웹 앱 주소가 아니라 구글 시트 → 확장 프로그램 → Apps Script로 들어가야 해요.

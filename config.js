@@ -2,7 +2,7 @@
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbzpZCUULOY0IBtBvshfsgNmJZLZhX1ai5Tnee9Mod5uiKi0ATkoumUYnR4jP2oQJLpHPA/exec';
 
 // 사이트 상단에 표시할 학교 이름
-const SCHOOL_NAME = '영도초등학교';
+const SCHOOL_NAME = '영도초등학교 생활안전부';
 
 // 파일 1개 최대 크기(MB). Apps Script 한계 때문에 25MB 이하를 권장합니다.
 const MAX_FILE_MB = 25;
