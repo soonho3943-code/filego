@@ -17,13 +17,17 @@ const SHEET_ROSTER = '교사명단';
 const SHEET_SUBMISSIONS = '제출기록';
 
 const HEADERS = {
-  [SHEET_COLLECTIONS]: ['ID', '제목', '안내문', '마감일', '상태', '폴더ID', '생성일', '대상명단(마감시 저장)'],
+  [SHEET_COLLECTIONS]: ['ID', '제목', '안내문', '마감일', '상태', '폴더ID', '생성일', '대상명단', '대상방식'],
   [SHEET_ROSTER]: ['이름', '소속'],
   [SHEET_SUBMISSIONS]: ['제출시각', '취합ID', '이름', '파일명', '파일ID'],
 };
 
 const STATUS_OPEN = '진행';
 const STATUS_CLOSED = '마감';
+
+// 대상방식: 전체 = 교사 명단 전체(인사발령 즉시 반영), 선택 = 취합마다 고른 사람만
+const MODE_ALL = '전체';
+const MODE_PICK = '선택';
 
 // ───────────────────────── 초기 설정 ─────────────────────────
 
@@ -81,10 +85,15 @@ function doPost(e) {
 
 /** 진행 중인 취합 목록 + 교사 명단 (제출 현황은 보내지 않음) */
 function list() {
+  const roster = readRoster_();
+  const rosterNames = roster.map(r => r.name);
   const collections = readCollections_()
     .filter(c => c.status === STATUS_OPEN)
-    .map(c => ({ id: c.id, title: c.title, desc: c.desc, deadline: c.deadline }));
-  return { collections, roster: readRoster_() };
+    .map(c => ({
+      id: c.id, title: c.title, desc: c.desc, deadline: c.deadline,
+      targets: c.mode === MODE_PICK ? targetsOf_(c, rosterNames) : null, // null이면 전체 명단
+    }));
+  return { collections, roster };
 }
 
 /** 이름을 고른 사람이 이미 냈는지만 확인 */
@@ -103,7 +112,7 @@ function upload(req) {
   const c = findCollection_(cid);
   if (!c) throw new Error('존재하지 않는 취합입니다.');
   if (c.status !== STATUS_OPEN) throw new Error('이미 마감된 취합입니다.');
-  if (!readRoster_().some(r => r.name === name)) throw new Error('명단에 없는 이름입니다. 관리자에게 문의해주세요.');
+  if (!targetsOf_(c).includes(name)) throw new Error('이번 취합 대상이 아닙니다. 관리자에게 문의해주세요.');
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -130,14 +139,15 @@ function upload(req) {
 
 function adminList() {
   const submitted = submittedMap_();
-  const rosterCount = readRoster_().length;
+  const rosterNames = readRoster_().map(r => r.name);
   const collections = readCollections_().map(c => {
     const names = Object.keys(submitted[c.id] || {});
-    const targets = targetsOf_(c);
+    const targets = targetsOf_(c, rosterNames);
     return {
       id: c.id, title: c.title, desc: c.desc, deadline: c.deadline, status: c.status, created: c.created,
+      mode: c.mode, targets: c.mode === MODE_PICK ? targets : null, // '이전 취합 대상 불러오기'용
       submittedCount: names.filter(n => targets.includes(n)).length,
-      targetCount: c.status === STATUS_OPEN ? rosterCount : targets.length,
+      targetCount: targets.length,
     };
   }).reverse(); // 최신순
   return { collections };
@@ -164,6 +174,7 @@ function adminDetail(req) {
   return {
     collection: {
       id: c.id, title: c.title, desc: c.desc, deadline: c.deadline, status: c.status,
+      mode: c.mode, targets: c.mode === MODE_PICK ? targets : null,
       folderUrl: 'https://drive.google.com/drive/folders/' + c.folderId,
     },
     submitted, missing, targetCount: targets.length,
@@ -175,9 +186,13 @@ function create(req) {
   if (!title) throw new Error('제목을 입력해주세요.');
   const id = 'c' + Date.now().toString(36);
   const month = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM');
+  const t = parseTargets_(req);
   const folder = getRootFolder_().createFolder(month + ' ' + safeName_(title));
-  sheet_(SHEET_COLLECTIONS).appendRow([
-    id, title, String(req.desc || ''), String(req.deadline || ''), STATUS_OPEN, folder.getId(), new Date(), '',
+  const sh = sheet_(SHEET_COLLECTIONS);
+  ensureHeader_(sh, SHEET_COLLECTIONS);
+  sh.appendRow([
+    id, title, String(req.desc || ''), String(req.deadline || ''), STATUS_OPEN, folder.getId(), new Date(),
+    t.mode === MODE_PICK ? JSON.stringify(t.targets) : '', t.mode,
   ]);
   return { id };
 }
@@ -188,6 +203,14 @@ function update(req) {
   const title = String(req.title || '').trim();
   if (!title) throw new Error('제목을 입력해주세요.');
   sh.getRange(c.row, 2, 1, 3).setValues([[title, String(req.desc || ''), String(req.deadline || '')]]);
+  if (req.mode) {
+    const t = parseTargets_(req);
+    let saved = '';
+    if (t.mode === MODE_PICK) saved = JSON.stringify(t.targets);
+    else if (c.status === STATUS_CLOSED) saved = JSON.stringify(readRoster_().map(r => r.name)); // 마감된 전체 취합은 현재 명단으로 고정
+    ensureHeader_(sh, SHEET_COLLECTIONS);
+    sh.getRange(c.row, 8, 1, 2).setValues([[saved, t.mode]]);
+  }
   return {};
 }
 
@@ -215,13 +238,13 @@ function removeSubmission(req) {
 function setStatus(req) {
   const c = mustCollection_(req.cid);
   const sh = sheet_(SHEET_COLLECTIONS);
+  // 직접 선택한 취합은 대상명단을 그대로 두고, 전체 취합만 마감 시 명단을 저장/재개 시 비움
   if (req.status === STATUS_CLOSED) {
-    const snapshot = JSON.stringify(readRoster_().map(r => r.name));
     sh.getRange(c.row, 5).setValue(STATUS_CLOSED);
-    sh.getRange(c.row, 8).setValue(snapshot);
+    if (c.mode !== MODE_PICK) sh.getRange(c.row, 8).setValue(JSON.stringify(readRoster_().map(r => r.name)));
   } else {
     sh.getRange(c.row, 5).setValue(STATUS_OPEN);
-    sh.getRange(c.row, 8).setValue('');
+    if (c.mode !== MODE_PICK) sh.getRange(c.row, 8).setValue('');
   }
   return {};
 }
@@ -307,6 +330,7 @@ function readCollections_() {
     status: String(r[4]) || STATUS_OPEN, folderId: String(r[5]),
     created: r[6] instanceof Date ? r[6].getTime() : 0,
     snapshot: String(r[7] || ''),
+    mode: String(r[8]) === MODE_PICK ? MODE_PICK : MODE_ALL,
   })).filter(c => c.id);
 }
 
@@ -346,12 +370,37 @@ function submittedMap_() {
   return map;
 }
 
-/** 진행 중이면 현재 명단, 마감됐으면 마감 당시 명단 */
-function targetsOf_(c) {
-  if (c.status === STATUS_CLOSED && c.snapshot) {
-    try { return JSON.parse(c.snapshot); } catch (err) { /* 현재 명단 사용 */ }
+/**
+ * 취합 대상자 이름 목록
+ * - 직접 선택: 고른 사람 (명단 순서대로, 명단에서 빠진 사람은 뒤에)
+ * - 전체: 진행 중이면 현재 명단, 마감됐으면 마감 당시 명단
+ */
+function targetsOf_(c, rosterNames) {
+  const roster = rosterNames || readRoster_().map(r => r.name);
+  let saved = null;
+  if (c.snapshot) {
+    try { saved = JSON.parse(c.snapshot); } catch (err) { /* 무시 */ }
   }
-  return readRoster_().map(r => r.name);
+  if (c.mode === MODE_PICK && saved) {
+    return roster.filter(n => saved.includes(n)).concat(saved.filter(n => !roster.includes(n)));
+  }
+  if (c.status === STATUS_CLOSED && saved) return saved;
+  return roster;
+}
+
+/** 요청의 대상방식/대상자를 검사해서 돌려줍니다. */
+function parseTargets_(req) {
+  if (req.mode !== MODE_PICK) return { mode: MODE_ALL, targets: null };
+  const targets = [...new Set((req.targets || []).map(n => String(n).trim()).filter(Boolean))];
+  if (!targets.length) throw new Error('대상자를 한 명 이상 선택해주세요.');
+  return { mode: MODE_PICK, targets };
+}
+
+/** 예전에 만든 시트에 새 열 제목이 없으면 채워 넣습니다. */
+function ensureHeader_(sh, name) {
+  const h = HEADERS[name];
+  const cur = sh.getRange(1, 1, 1, h.length).getValues()[0];
+  if (cur.some((v, i) => v !== h[i])) sh.getRange(1, 1, 1, h.length).setValues([h]);
 }
 
 /** 재제출 시 이전 파일을 휴지통으로 옮기고 기록을 지웁니다. */

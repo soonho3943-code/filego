@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>파일 취합 관리</title>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=9" />
+  <link rel="stylesheet" href="style.css?v=10" />
   <style>
     .hero { padding: 26px 20px 22px; }
     .toolbar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
@@ -31,6 +31,17 @@
     .roster-table .x { background: none; border: none; color: var(--muted); font-size: 20px; }
     .roster-table .x:hover { color: var(--red); }
     .sticky-save { position: sticky; bottom: 0; background: var(--bg); padding: 12px 0; }
+
+    .seg { display: flex; gap: 8px; }
+    .seg label { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 11px; border: 1.5px solid var(--line); border-radius: 10px; cursor: pointer; font-weight: 600; background: #fff; }
+    .seg label:has(input:checked) { border-color: var(--blue); background: var(--blue-soft); color: var(--blue); }
+    .pick-box { margin-top: 10px; border: 1.5px solid var(--line); border-radius: 12px; padding: 12px; }
+    .pick-tools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .pick-tools .input { padding: 8px 10px; flex: 1; min-width: 140px; }
+    .pick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 6px; margin-top: 10px; max-height: 340px; overflow-y: auto; }
+    .pick-grid label { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-radius: 8px; background: #f6f9fd; cursor: pointer; font-size: 14px; }
+    .pick-grid label:has(input:checked) { background: var(--blue-soft); color: var(--blue); font-weight: 600; }
+    .pick-grid label.gone { opacity: .6; }
   </style>
 </head>
 <body>
@@ -76,6 +87,23 @@
         <textarea class="input" id="e-desc" placeholder="예) 2026년 2학기 이수한 연수의 이수증을 PDF로 올려주세요."></textarea>
         <label class="lbl">마감일 <span class="meta">(선택)</span></label>
         <input class="input" type="date" id="e-deadline" />
+        <label class="lbl">대상자</label>
+        <div class="seg">
+          <label><input type="radio" name="e-mode" value="전체" onchange="onModeChange()" checked /> 전체 교직원</label>
+          <label><input type="radio" name="e-mode" value="선택" onchange="onModeChange()" /> 직접 선택</label>
+        </div>
+        <div id="pick-box" class="pick-box hidden">
+          <div class="pick-tools">
+            <input class="input" id="pick-search" placeholder="🔍 이름 검색" oninput="renderPick()" />
+            <button class="btn ghost sm" onclick="pickAll(true)">전체 선택</button>
+            <button class="btn ghost sm" onclick="pickAll(false)">전체 해제</button>
+          </div>
+          <div class="pick-tools" style="margin-top:6px">
+            <select class="input" id="pick-prev" onchange="loadPrevTargets()"></select>
+          </div>
+          <div class="pick-grid" id="pick-grid"></div>
+          <div class="meta" id="pick-count" style="margin-top:8px"></div>
+        </div>
         <div style="margin-top:20px"><button class="btn block" id="e-save" onclick="saveEdit()">만들기</button></div>
         <div class="notice err hidden" id="e-msg"></div>
       </div>
@@ -119,8 +147,8 @@
 
   <div class="toast" id="toast"></div>
 
-  <script src="config.js?v=9"></script>
-  <script src="merge.js?v=9"></script>
+  <script src="config.js?v=10"></script>
+  <script src="merge.js?v=10"></script>
   <script>
     let password = ss('get', 'filego-pw') || '';
     let editId = null;
@@ -175,6 +203,7 @@
       loading('list-body');
       let res;
       try { res = await adminApi('adminList'); } catch (e) { return errorBox('list-body', e, 'openList()'); }
+      window._collections = res.collections;
 
       if (!res.collections.length) {
         document.getElementById('list-body').innerHTML =
@@ -221,7 +250,8 @@
           </div>
           ${c.deadline ? `<div class="meta">마감 ${formatDate(c.deadline)}</div>` : ''}
           ${c.desc ? `<div class="desc">${esc(c.desc)}</div>` : ''}
-          <div class="count" style="margin-top:14px">${inTarget} <small>/ ${d.targetCount}명 제출 (${pct}%)</small></div>
+          <div class="meta" style="margin-top:10px">👥 대상: ${c.mode === '선택' ? `직접 선택 (${d.targetCount}명)` : '전체 교직원'}</div>
+          <div class="count" style="margin-top:6px">${inTarget} <small>/ ${d.targetCount}명 제출 (${pct}%)</small></div>
           <div class="progress ${pct === 100 ? 'green' : ''}"><div style="width:${pct}%"></div></div>
           <div class="actions">
             <button class="btn sm" onclick="copyText(_detail.link, '제출 링크를 복사했습니다. 메신저에 붙여넣으세요.')">🔗 제출 링크 복사</button>
@@ -230,7 +260,7 @@
             <button class="btn ghost sm" id="merge-btn" onclick="mergePdf()">📑 PDF 하나로 합치기</button>
           </div>
           <div class="actions">
-            <button class="btn ghost sm" onclick="openEdit('${esc(c.id)}')">✏️ 수정</button>
+            <button class="btn ghost sm" onclick="openEdit('${esc(c.id)}')">✏️ 수정 · 대상자</button>
             ${open
               ? `<button class="btn ghost sm" onclick="setStatus('${esc(c.id)}','마감')">🔒 마감하기</button>`
               : `<button class="btn ghost sm" onclick="setStatus('${esc(c.id)}','진행')">🔓 다시 열기</button>`}
@@ -254,7 +284,7 @@
             <div class="sub-item">
               <div class="row between">
                 <span class="grow"><b>${esc(s.name)}</b> <span class="meta">${esc(s.dept)}</span>
-                  ${s.outside ? '<span class="badge gray">명단 외</span>' : ''}</span>
+                  ${s.outside ? '<span class="badge gray">대상 외</span>' : ''}</span>
                 <span class="meta">${timeText(s.time)}</span>
                 <button class="btn danger sm" onclick="removeSubmission(${i})">삭제</button>
               </div>
@@ -374,7 +404,10 @@
     }
 
     // ── 새 취합 / 수정 ──
-    function openEdit(cid) {
+    let pickNames = [];        // 체크 목록에 보일 이름 (명단 순서)
+    let pickSet = new Set();   // 체크된 이름
+
+    async function openEdit(cid) {
       editId = cid || null;
       const c = cid && window._detail && window._detail.c.id === cid ? window._detail.c : null;
       document.getElementById('edit-heading').textContent = c ? '취합 수정' : '새 취합 만들기';
@@ -383,8 +416,81 @@
       document.getElementById('e-desc').value = c ? c.desc : '';
       document.getElementById('e-deadline').value = c ? c.deadline : '';
       document.getElementById('e-msg').classList.add('hidden');
+      const mode = c && c.mode === '선택' ? '선택' : '전체';
+      document.querySelector(`input[name="e-mode"][value="${mode}"]`).checked = true;
+      document.getElementById('pick-search').value = '';
+      pickSet = new Set(c && c.targets ? c.targets : []);
+      pickNames = [];
+      document.getElementById('pick-grid').innerHTML = '<div class="meta">명단 불러오는 중...</div>';
+      document.getElementById('pick-count').textContent = '';
+      onModeChange();
       show('v-edit');
       document.getElementById('e-title').focus();
+
+      try {
+        const [r, list] = await Promise.all([
+          adminApi('getRoster'),
+          window._collections ? null : adminApi('adminList'),
+        ]);
+        if (list) window._collections = list.collections;
+        const names = r.roster.map(x => x.name);
+        window._rosterNames = names;
+        pickNames = names.concat([...pickSet].filter(n => !names.includes(n))); // 명단에서 빠진 사람도 보여서 뺄 수 있게
+        renderPrevOptions();
+        renderPick();
+      } catch (e) { toast(e.message); }
+    }
+
+    function editMode() { return document.querySelector('input[name="e-mode"]:checked').value; }
+
+    function onModeChange() {
+      document.getElementById('pick-box').classList.toggle('hidden', editMode() !== '선택');
+    }
+
+    function pickCountText() {
+      return `선택 ${pickSet.size}명 / 전체 ${(window._rosterNames || pickNames).length}명`;
+    }
+
+    function renderPick() {
+      const q = document.getElementById('pick-search').value.trim();
+      const roster = window._rosterNames || pickNames;
+      document.getElementById('pick-grid').innerHTML = pickNames.map((n, i) => q && !n.includes(q) ? '' : `
+        <label class="${roster.includes(n) ? '' : 'gone'}" title="${roster.includes(n) ? '' : '현재 교사 명단에 없는 사람'}">
+          <input type="checkbox" ${pickSet.has(n) ? 'checked' : ''} onchange="togglePick(${i}, this.checked)" />${esc(n)}
+        </label>`).join('') || '<div class="meta">검색 결과가 없습니다.</div>';
+      document.getElementById('pick-count').textContent = pickCountText();
+    }
+
+    function togglePick(i, on) {
+      on ? pickSet.add(pickNames[i]) : pickSet.delete(pickNames[i]);
+      document.getElementById('pick-count').textContent = pickCountText();
+    }
+
+    /** 검색 중이면 보이는 사람만 선택/해제 */
+    function pickAll(on) {
+      const q = document.getElementById('pick-search').value.trim();
+      pickNames.filter(n => !q || n.includes(q)).forEach(n => on ? pickSet.add(n) : pickSet.delete(n));
+      renderPick();
+    }
+
+    function renderPrevOptions() {
+      const prev = (window._collections || []).filter(x => x.targets && x.id !== editId);
+      const sel = document.getElementById('pick-prev');
+      sel.innerHTML = (prev.length ? '<option value="">📋 이전 취합 대상 불러오기</option>' : '<option value="">📋 이전에 직접 선택한 취합이 없습니다</option>') +
+        prev.map((x, i) => `<option value="${i}">${esc(x.title)} (${x.targets.length}명)</option>`).join('');
+      sel.disabled = !prev.length;
+      sel._prev = prev;
+    }
+
+    function loadPrevTargets() {
+      const sel = document.getElementById('pick-prev');
+      const x = sel._prev[sel.value];
+      sel.value = '';
+      if (!x) return;
+      pickSet = new Set(x.targets);
+      x.targets.forEach(n => { if (!pickNames.includes(n)) pickNames.push(n); });
+      renderPick();
+      toast(`「${x.title}」 대상 ${x.targets.length}명을 불러왔습니다.`);
     }
 
     async function saveEdit() {
@@ -394,16 +500,21 @@
         title: document.getElementById('e-title').value.trim(),
         desc: document.getElementById('e-desc').value.trim(),
         deadline: document.getElementById('e-deadline').value,
+        mode: editMode(),
+        targets: editMode() === '선택' ? pickNames.filter(n => pickSet.has(n)) : null,
       };
       if (!payload.title) { msg.textContent = '제목을 입력해주세요.'; msg.classList.remove('hidden'); return; }
+      if (payload.mode === '선택' && !payload.targets.length) { msg.textContent = '대상자를 한 명 이상 선택해주세요.'; msg.classList.remove('hidden'); return; }
       btn.disabled = true;
       try {
         if (editId) {
           await adminApi('update', { cid: editId, ...payload });
+          window._collections = null; // 대상이 바뀌었을 수 있어 다음에 다시 불러옴
           toast('저장했습니다.');
           openDetail(editId);
         } else {
           const r = await adminApi('create', payload);
+          window._collections = null;
           toast('만들었습니다. 「제출 링크 복사」로 선생님들께 안내하세요.');
           openDetail(r.id);
         }

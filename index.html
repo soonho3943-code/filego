@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>파일 제출</title>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=9" />
+  <link rel="stylesheet" href="style.css?v=10" />
   <style>
     .done-box { text-align: center; padding: 40px 20px; }
     .done-box .icon { font-size: 54px; margin-bottom: 8px; }
@@ -42,6 +42,7 @@
       <div class="card">
         <label class="lbl"><span class="num">1</span>이름 선택</label>
         <select class="input" id="f-name" onchange="onNameChange()"></select>
+        <div class="meta hidden" id="f-name-hint" style="margin-top:6px">이번 취합 대상자만 보입니다. 이름이 없으면 대상이 아니니 제출하지 않으셔도 됩니다.</div>
         <div id="f-already" class="notice ok already hidden"></div>
 
         <label class="lbl"><span class="num">2</span>파일 선택</label>
@@ -75,7 +76,7 @@
 
   <div class="toast" id="toast"></div>
 
-  <script src="config.js?v=9"></script>
+  <script src="config.js?v=10"></script>
   <script>
     let data = { collections: [], roster: [] };
     let current = null;     // 선택한 취합
@@ -153,9 +154,15 @@
       document.getElementById('f-desc').textContent = current.desc;
       document.getElementById('f-desc').classList.toggle('hidden', !current.desc);
 
+      // 이 취합의 대상자만 표시 (targets가 없으면 전체 명단)
+      const people = current.targets
+        ? current.targets.map(n => data.roster.find(r => r.name === n) || { name: n, dept: '' })
+        : data.roster;
+      document.getElementById('f-name-hint').classList.toggle('hidden', !current.targets);
+
       // 소속별로 묶어서 표시
       const groups = {};
-      data.roster.forEach(r => (groups[r.dept || '기타'] = groups[r.dept || '기타'] || []).push(r.name));
+      people.forEach(r => (groups[r.dept || '기타'] = groups[r.dept || '기타'] || []).push(r.name));
       const opt = n => `<option value="${esc(n)}">${esc(n)}</option>`;
       const keys = Object.keys(groups);
       document.getElementById('f-name').innerHTML = '<option value="">이름을 선택하세요</option>' +
