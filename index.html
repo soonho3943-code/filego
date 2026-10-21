@@ -42,7 +42,6 @@
       <div class="card">
         <label class="lbl"><span class="num">1</span>이름 선택</label>
         <select class="input" id="f-name" onchange="onNameChange()"></select>
-        <div class="meta hidden" id="f-name-hint" style="margin-top:6px">이번 취합 대상자만 보입니다. 이름이 없으면 대상이 아니니 제출하지 않으셔도 됩니다.</div>
         <div id="f-already" class="notice ok already hidden"></div>
 
         <label class="lbl"><span class="num">2</span>파일 선택</label>
@@ -158,7 +157,6 @@
       const people = current.targets
         ? current.targets.map(n => data.roster.find(r => r.name === n) || { name: n, dept: '' })
         : data.roster;
-      document.getElementById('f-name-hint').classList.toggle('hidden', !current.targets);
 
       // 소속별로 묶어서 표시
       const groups = {};
